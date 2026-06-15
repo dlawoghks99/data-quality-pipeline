@@ -1,0 +1,28 @@
+# 데이터 (git에 올리지 않음 - 용량/보안)
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 환경변수/시크릿 (절대 커밋 금지)
+.env
+*.secret
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Great Expectations (생성되는 결과물)
+great_expectations/uncommitted/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
