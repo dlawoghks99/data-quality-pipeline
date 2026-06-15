@@ -1,21 +1,62 @@
+import uuid
+import json
+from datetime import datetime, timezone
+from sqlalchemy import text
 import os
 import pandas as pd
 import great_expectations as gx
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
-
-def get_orders_dataframe():
+def get_engine():
     load_dotenv()
     DB_USER = os.getenv("POSTGRES_USER")
     DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
     DB_NAME = os.getenv("POSTGRES_DB")
-    engine = create_engine(
+    return create_engine(
         f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@localhost:5432/{DB_NAME}"
     )
-    df = pd.read_sql("SELECT * FROM olist_orders_dataset", engine)
-    return df
 
+def get_orders_dataframe(engine):
+    return pd.read_sql("SELECT * FROM olist_orders_dataset", engine);
+
+def log_results_to_db(results, engine, table_name="olist_orders_dataset"):
+    run_id = uuid.uuid4().hex                  # ① 이번 실행 전체를 묶는 식별자
+    validated_at = datetime.now(timezone.utc)  #    실행 시각(UTC)
+
+    rows = []
+    for result in results:
+        kwargs = result.expectation_config.kwargs
+        r = result.result
+        rows.append({
+            "run_id": run_id,
+            "validated_at": validated_at,
+            "table_name": table_name,
+            "column_name": kwargs.get("column"),
+            "expectation_type": result.expectation_config.expectation_type,
+            "success": bool(result.success),
+            "unexpected_count": r.get("unexpected_count"),
+            "unexpected_percent": r.get("unexpected_percent"),
+            # ② 리스트라 JSON 문자열로 직렬화 (SQL에서 ::jsonb로 캐스팅)
+            "partial_unexpected_list": json.dumps(
+                r.get("partial_unexpected_list", []), ensure_ascii=False
+            ),
+        })
+
+    insert_sql = text("""
+        INSERT INTO validation_results
+            (run_id, validated_at, table_name, column_name, expectation_type,
+             success, unexpected_count, unexpected_percent, partial_unexpected_list)
+        VALUES
+            (:run_id, :validated_at, :table_name, :column_name, :expectation_type,
+             :success, :unexpected_count, :unexpected_percent,
+             CAST(:partial_unexpected_list AS JSONB))
+    """)
+
+    with engine.begin() as conn:           # ③ 트랜잭션 (다 성공해야 커밋)
+        conn.execute(insert_sql, rows)
+
+    print(f"[LOG] {len(rows)} results saved (run_id={run_id})")
 
 def validate_orders(df):
     ge_df = gx.dataset.PandasDataset(df)
@@ -74,7 +115,9 @@ def print_results(results):
 
 
 if __name__ == "__main__":
-    df = get_orders_dataframe()
+    engine = get_engine()
+    df = get_orders_dataframe(engine)
     print(f"Loaded {len(df)} rows from olist_orders_dataset")
     results = validate_orders(df)
     print_results(results)
+    log_results_to_db(results, engine)
