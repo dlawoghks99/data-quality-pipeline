@@ -11,6 +11,7 @@ venv/
 
 # 환경변수/시크릿 (절대 커밋 금지)
 .env
+!.env.example
 *.secret
 
 # dbt
