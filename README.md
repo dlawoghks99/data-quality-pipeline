@@ -31,7 +31,7 @@
 
 ## 프로젝트 구조
 
-\`\`\`
+```
 data-quality-pipeline/
 ├── dags/                # Airflow DAG
 ├── dbt/                 # dbt 프로젝트
@@ -40,4 +40,4 @@ data-quality-pipeline/
 ├── scripts/             # 유틸 스크립트
 ├── docker/              # Docker 관련
 └── docs/                # 문서
-\`\`\`
+```
